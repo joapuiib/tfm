@@ -22,12 +22,14 @@ class TestDataset(Dataset):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
+        """
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is not None:
             print("worker {} loading index {}".format(worker_info.id, idx))
+        """
 
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
-        print(img_path)
+        # print(img_path)
         image = read_image(img_path)
         image = self.extract_patches(image)
 
@@ -61,15 +63,28 @@ class TestDataset(Dataset):
 
 def collate_fn(batch):
     """
-    Collate function to be used with the DataLoader. It takes a list of samples and returns a batch.
+    Collate function to be used with the DataLoader.
+    It takes a batch of patched images (4D) and returns
+    a 3D tensor with each patch labeled.
 
     For each sample, the batch contains the patches extracted from the image (with shape (N, C, H, W)) and the label.
 
     The method returns a single tensor containg all the patches of the batch, with shape (N, C, H, W), and a tensor
     containing the labels of the batch.
     """
-    images, labels = zip(*batch)
-    return torch.cat(images, dim=0), torch.tensor(labels)
+    patches = []
+    labels = []
+    for image, label in batch:
+        for patch in image:
+            patches.append(patch)
+            labels.append(label)
+
+    patches = torch.stack(patches)
+    # print(patches.shape)
+
+    patches_labels = torch.tensor(labels)
+    # print(patches_labels.shape)
+    return patches, patches_labels
 
 if __name__ == "__main__":
     dataset = TestDataset(
@@ -77,19 +92,27 @@ if __name__ == "__main__":
             img_dir='data/',
             patch_height=100,
             patch_width=100,
-            vertical_offset=50,
-            horizontal_offset=50,
+            vertical_offset=100,
+            horizontal_offset=100
     )
-    dataloader = DataLoader(dataset, batch_size=2, num_workers=4, collate_fn=collate_fn)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=2,
+        num_workers=1,
+        collate_fn=collate_fn,
+        shuffle=True,
+    )
 
     print("Number of samples in the dataset: ", len(dataloader))
 
-    for (img, label) in dataloader:
-        sqrt_size = ceil(sqrt(len(img)))
+    for (patches, labels) in dataloader:
+        sqrt_size = ceil(sqrt(len(patches)))
         fig = plt.figure(figsize=(sqrt_size, sqrt_size))
         # plt.text(5, 5, f"class: {label}", bbox={'facecolor': 'white', 'pad': 10})
-        for i, patch in enumerate(img):
+        for i, (patch, label) in enumerate(zip(patches, labels)):
             fig.add_subplot(sqrt_size, sqrt_size, i+1)
+            plt.title(f"class: {label}", fontsize=8)
             plt.imshow(patch.permute(1, 2, 0))
             # plt.imshow(img)
+        plt.subplots_adjust(hspace=0.75)
         plt.show()
