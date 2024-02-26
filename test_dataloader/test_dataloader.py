@@ -54,6 +54,9 @@ class TestDataset(Dataset):
         C, H, W = image.shape
         patches = []
 
+        if H < self.patch_height or W < self.patch_width:
+            raise ValueError("The image is smaller than the patch size")
+
         for i in range(0, H - self.patch_height + 1, self.vertical_offset):
             for j in range(0, W - self.patch_width + 1, self.horizontal_offset):
                 patch = image[:, i:i+self.patch_height, j:j+self.patch_width]
