@@ -1,13 +1,80 @@
+#!/bin/env python3
+
 import torch
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.nn.functional as F
 import torchvision
 
+import albumentations
+import albumentations.pytorch
+from albumentations.pytorch import ToTensorV2
+
+import os
+import argparse
+import pandas as pd
+import numpy as np
+import random
+
+
 def resnet18(n_classes=2):
     model = torchvision.models.resnet18(pretrained='imagenet')
     model.fc = torch.nn.Linear(in_features=model.fc.in_features, out_features=n_classes, bias=True)
     return model
+
+
+def read_data(config):
+    path = os.path.join(config.path, str(config.size))
+    train_df = pd.read_csv(os.path.join(path, 'train.csv'))
+    test_df = pd.read_csv(os.path.join(path, 'test.csv'))
+
+    print('=> Target attribute:', config.target)
+    groupby = config.target + ''
+    print('=> Raw data (train)')
+    print(train_df.groupby(groupby).count())
+
+    print('\n=> Raw data (test)')
+    print(test_df.groupby(groupby).count())
+
+    return train_df, test_df
+
+
+def preprocess_data(train_df, test_df, config):
+    if config.target == 'grade':
+        # Preprocess data
+        train_df = preprocess_df(train_df, config.label)
+        test_df = preprocess_df(test_df, config.label)
+
+        print('\n=> Preprocessed data (train)')
+        print(train_df.groupby(config.target).count())
+
+        print('\n=> Preprocessed data (test)')
+        print(test_df.groupby(config.target).count())
+
+        # balance train_df (sample mean size)
+        groups = train_df.groupby('grade').count()
+        grade_min = int(groups.image_id.idxmin())
+        mean_size = int(train_df.groupby('grade').count().mean()['image_id'])
+
+        train_df = pd.concat((
+            train_df[train_df.grade == 0].sample(mean_size, replace=(grade_min==0), random_state=config.seed).copy(),
+            train_df[train_df.grade == 1].sample(mean_size, replace=(grade_min==1), random_state=config.seed).copy()
+        ))
+
+    return train_df, test_df
+
+
+def preprocess_df(df, label):
+    if label == 'norm':
+        df.loc[df.grade == 0, 'grade'] = -1
+        df.loc[df.type == 'norm', 'grade'] = 0
+
+    df = df[df.grade >= 0].copy()
+
+    if label != 'both' and label != 'norm':
+        df = df[df.type == label].copy()
+    return df
+
 
 def create_loaders(train_dataset, test_dataset, config):
     # Final loaders
@@ -23,12 +90,20 @@ def create_loaders(train_dataset, test_dataset, config):
     return train_loader, test_loader
 
 def main(config):
-    path = os.path.join(config.path, str(config.size))
-    train_df = pd.read_csv(os.path.join(path, 'train.csv'))
-    test_df = pd.read_csv(os.path.join(path, 'test.csv'))
+    # Read data
+    train_df, test_df = read_data(config)
 
-    # Create dataset
-    train_df, test_df = create_dataset(config)
+    # Preprocess data
+    train_df, test_df = preprocess_data(train_df, test_df, config)
+
+    print('\n---- DATA SUMMARY ----')
+    print('---------------------------------- Train ----------------------------------')
+    print(train_df.groupby(config.target).count())
+    print(len(train_df.wsi.unique()), 'WSIs')
+
+    print('\n---------------------------------- Test ----------------------------------')
+    print(test_df.groupby(config.target).count())
+    print(len(test_df.wsi.unique()), 'WSIs')
 
     # Loaders
     train_loader, test_loader = create_loaders(train_df, test_df, config)
@@ -41,7 +116,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # data config
-    parser.add_argument('--path', default=f'{os.path.expanduser("~")}/data/UNITOPATHO', type=str, help='UNITOPATHO dataset path')
+    parser.add_argument('--path', default=f'{os.path.expanduser("~")}/unitopath/', type=str, help='UNITOPATHO dataset path')
     parser.add_argument('--size', default=100, type=int, help='patch size in µm (default 100)')
     parser.add_argument('--subsample', default=-1, type=int, help='subsample size for data (-1 to disable, default -1)')
 

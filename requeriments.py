@@ -3,3 +3,4 @@ pyarrow
 pandas
 torchvision
 matplotlib
+albumentations
