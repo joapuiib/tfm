@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import cv2
 import os
+import sys
 
 class UnitopathoDataset(torch.utils.data.Dataset):
     def __init__(self, df, T, path, target, subsample=-1, gray=False, mock=False):
@@ -18,7 +19,7 @@ class UnitopathoDataset(torch.utils.data.Dataset):
             print(f'Target must be in {allowed_target}, got {target}')
             exit(1)
 
-        print(f'Loaded {len(self.df)} images')
+        print(f'Loaded {len(self.df)} images', file=sys.stderr)
 
     def __len__(self):
         return len(self.df)

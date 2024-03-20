@@ -12,6 +12,7 @@ from albumentations.pytorch import ToTensorV2
 from functools import partial
 
 import os
+import sys
 import argparse
 import pandas as pd
 import numpy as np
@@ -20,14 +21,28 @@ import random
 from unitopatho import UnitopathoDataset
 import utils
 
+def print_stderr(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
 class UnitopathTrain():
     def __init__(self, config, checkpoint=None):
         self.config = config
         self.groupby = config.target
         self.checkpoint = None
+        self.load_checkpoint();
 
         utils.set_seed(config.seed)
         self.scaler = torch.cuda.amp.GradScaler()
+
+
+    def load_checkpoint(self):
+        print_stderr('=> Looking for saved checkpoint in ', self.model_path(), '...')
+        model_path = self.model_path()
+        if os.path.exists(model_path):
+            print_stderr('=> Loaded checkpoint')
+            self.checkpoint = torch.load(model_path)
+        else:
+            print_stderr('=> No checkpoint found')
 
 
     def resnet18(self, n_classes=2):
@@ -50,12 +65,12 @@ class UnitopathTrain():
         train_df = pd.read_csv(os.path.join(self.path, 'train.csv'))
         test_df = pd.read_csv(os.path.join(self.path, 'test.csv'))
 
-        print('=> Target attribute:', self.config.target)
-        print('=> Raw data (train)')
-        print(train_df.groupby(self.groupby).count())
+        print_stderr('=> Target attribute:', self.config.target)
+        print_stderr('=> Raw data (train)')
+        print_stderr(train_df.groupby(self.groupby).count())
 
-        print('\n=> Raw data (test)')
-        print(test_df.groupby(self.groupby).count())
+        print_stderr('\n=> Raw data (test)')
+        print_stderr(test_df.groupby(self.groupby).count())
 
         self.train_df = train_df
         self.test_df = test_df
@@ -79,11 +94,11 @@ class UnitopathTrain():
             train_df = self.preprocess_df(train_df, config.label)
             test_df = self.preprocess_df(test_df, config.label)
 
-            print('\n=> Preprocessed data (train)')
-            print(train_df.groupby(self.groupby).count())
+            print_stderr('\n=> Preprocessed data (train)')
+            print_stderr(train_df.groupby(self.groupby).count())
 
-            print('\n=> Preprocessed data (test)')
-            print(test_df.groupby(self.groupby).count())
+            print_stderr('\n=> Preprocessed data (test)')
+            print_stderr(test_df.groupby(self.groupby).count())
 
             # balance train_df (sample mean size)
             groups = train_df.groupby('grade').count()
@@ -126,16 +141,16 @@ class UnitopathTrain():
         train_df = self.train_df
         test_df = self.test_df
 
-        print('\n---- DATA SUMMARY (After balance) ----')
-        print('---------------------------------- Train ----------------------------------')
-        print(train_df.groupby(self.groupby).count())
-        print(len(train_df.wsi.unique()), 'WSIs')
+        print_stderr('\n---- DATA SUMMARY (After balance) ----')
+        print_stderr('---------------------------------- Train ----------------------------------')
+        print_stderr(train_df.groupby(self.groupby).count())
+        print_stderr(len(train_df.wsi.unique()), 'WSIs')
 
-        print('\n---------------------------------- Test ----------------------------------')
-        print(test_df.groupby(self.groupby).count())
-        print(len(test_df.wsi.unique()), 'WSIs')
+        print_stderr('\n---------------------------------- Test ----------------------------------')
+        print_stderr(test_df.groupby(self.groupby).count())
+        print_stderr(len(test_df.wsi.unique()), 'WSIs')
 
-        print(f'=> Training for {self.n_classes} classes')
+        print_stderr(f'=> Training for {self.n_classes} classes')
 
 
     def create_model_params(self):
@@ -150,7 +165,7 @@ class UnitopathTrain():
         )
 
         self.mean, self.std = norm[self.config.preprocess]['mean'], norm[self.config.preprocess]['std']
-        print('=> mean, std:', self.mean, self.std)
+        print_stderr('=> mean, std:', self.mean, self.std)
 
 
     def set_data_augmentation(self):
@@ -179,7 +194,7 @@ class UnitopathTrain():
                     img, _, _ = normalizer.normalize(img, stains=False)
                     img = img.numpy().astype(np.uint8)
                 except Exception as e:
-                    print('Could not normalize image:', e)
+                    print_stderr('Could not normalize image:', e)
                     img = x
                 return img
             return x
@@ -225,6 +240,15 @@ class UnitopathTrain():
         self.test_loader = test_loader
 
 
+    def model_path(self):
+        model_dir = os.path.expanduser("~")
+        model_dir += f"/tfm/models/{self.config.test}/"
+        utils.ensure_dir(model_dir);
+
+        model_dir += f"model.pt"
+        return model_dir
+
+
     def train(self):
         config = self.config
         train_loader = self.train_loader
@@ -247,23 +271,27 @@ class UnitopathTrain():
         criterion = F.cross_entropy
 
         for epoch in range(config.epochs):
-            if config.test is None:
-                train_metrics = utils.train(model, train_loader, criterion,
-                                            optimizer, config.device, metrics=utils.metrics,
-                                            accumulation_steps=config.accumulation_steps, scaler=self.scaler)
-                scheduler.step()
+            train_metrics = utils.train(model, train_loader, criterion,
+                                        optimizer, config.device, metrics=utils.metrics,
+                                        accumulation_steps=config.accumulation_steps, scaler=self.scaler)
+            scheduler.step()
 
             test_metrics = utils.test(model, test_loader, criterion, config.device, metrics=utils.metrics)
 
-            if config.test is None:
-                print(f'Epoch {epoch}: train: {train_metrics}')
-                # wandb.log({'train': train_metrics, 'test': test_metrics})
-                # torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'config': config}, os.path.join(wandb.run.dir, 'model.pt'))
-
+            print(f'Epoch {epoch}')
+            print(f'train: {train_metrics}')
             print(f'test: {test_metrics}')
-            if config.test is not None:
-                break
 
+            if config.test is not None:
+                # wandb.log({'train': train_metrics, 'test': test_metrics})
+                torch.save(
+                    {
+                        'model': model.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'config': config
+                    },
+                    self.model_path()
+                )
 
 
 def main(config):
@@ -276,8 +304,6 @@ def main(config):
 
     trainer.print_data_summary()
 
-
-    # Create loaders
     trainer.create_model_params()
     trainer.set_data_augmentation()
     trainer.apply_data_augmentation()
@@ -288,6 +314,8 @@ def main(config):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
+    parser.add_argument('test', type=str, help='Run id to test')
 
     # data config
     parser.add_argument('--path', default=f'{os.path.expanduser("~")}/unitopath/', type=str, help='UNITOPATHO dataset path')
@@ -311,13 +339,13 @@ if __name__ == '__main__':
     # top_label: distinguish between NORM, HP, TA.HG, TA.LG, TVA.HG, TVA.LG
     parser.add_argument('--target', default='grade', help='target attribute: grade, type, top_label (default: grade)')
     parser.add_argument('--label', default='both', type=str, help='only when target=grade; values: ta, tva, norm or both (default: both)')
-    parser.add_argument('--test', type=str, help='Run id to test', default=None)
 
     # misc config
     parser.add_argument('--name', type=str, default=None)
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--mock', action='store_true', dest='mock', help='mock dataset (random noise)')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--model_path', type=str, help="model weights dir")
     parser.set_defaults(mock=False)
 
     config = parser.parse_args()
