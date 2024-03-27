@@ -37,19 +37,23 @@ class UnitopathoDataset(torch.utils.data.Dataset):
             img = np.random.randint(0, 255, (224, 224, C)).astype(np.uint8)
 
         else:
-            img = cv2.imread(image_id)
-            if self.subsample != -1:
-                w = img.shape[0]
-                while w//2 > self.subsample:
-                    img = cv2.resize(img, (w//2, w//2))
-                    w = w//2
-                img = cv2.resize(img, (self.subsample, self.subsample))
+            try:
+                img = cv2.imread(image_id)
+                if self.subsample != -1:
+                    w = img.shape[0]
+                    while w//2 > self.subsample:
+                        img = cv2.resize(img, (w//2, w//2))
+                        w = w//2
+                    img = cv2.resize(img, (self.subsample, self.subsample))
 
-            if self.gray:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                img = np.expand_dims(img, axis=2)
-            else:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                if self.gray:
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    img = np.expand_dims(img, axis=2)
+                else:
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            except Exception as e:
+                print(f'Error reading image {image_id}: {e}', file=sys.stderr)
+                raise e
 
         if self.T is not None:
             img = self.T(img)
