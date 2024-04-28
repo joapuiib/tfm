@@ -36,8 +36,8 @@ class UnitopathTrain():
 
 
     def load_checkpoint(self):
-        print_stderr('=> Looking for saved checkpoint in ', self.model_path(), '...')
         model_path = self.model_path()
+        print_stderr('=> Looking for saved checkpoint in ', model_path, '...')
         if os.path.exists(model_path):
             print_stderr('=> Loaded checkpoint')
             self.checkpoint = torch.load(model_path)
@@ -241,12 +241,11 @@ class UnitopathTrain():
 
 
     def model_path(self):
-        model_dir = os.path.expanduser("~")
-        model_dir += f"/tfm/models/{self.config.test}/"
-        utils.ensure_dir(model_dir);
+        model_path = self.config.model_path
+        utils.ensure_dir(model_path);
 
-        model_dir += f"model.pt"
-        return model_dir
+        model_path += f"/model.pt"
+        return model_path
 
 
     def train(self):
