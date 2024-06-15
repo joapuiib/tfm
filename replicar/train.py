@@ -62,6 +62,7 @@ class UnitopathTrain():
         :return: train_df, test_df
         """
         self.path = os.path.join(self.config.path, str(self.config.size))
+        print(f"Path: {self.path}")
         train_df = pd.read_csv(os.path.join(self.path, 'train.csv'))
         test_df = pd.read_csv(os.path.join(self.path, 'test.csv'))
 
@@ -318,7 +319,7 @@ if __name__ == '__main__':
 
     # data config
     parser.add_argument('--path', default=f'{os.path.expanduser("~")}/unitopath/', type=str, help='UNITOPATHO dataset path')
-    parser.add_argument('--size', default=100, type=int, help='patch size in µm (default 100)')
+    parser.add_argument('--size', default=100, type=str, help='patch size in µm (default 100)')
     parser.add_argument('--subsample', default=-1, type=int, help='subsample size for data (-1 to disable, default -1)')
 
     # optimizer & network config
