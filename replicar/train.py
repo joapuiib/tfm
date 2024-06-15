@@ -16,43 +16,55 @@ import sys
 import argparse
 import pandas as pd
 import numpy as np
-import random
 
 from unitopatho import UnitopathoDataset
 import utils
 
+
 def print_stderr(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
+
+def main(config):
+    trainer = UnitopathTrain(config)
+
+    trainer.load_checkpoint()
+
+    trainer.read_data()
+    trainer.preprocess_data()
+    trainer.print_data_summary()
+
+    trainer.create_model_params()
+    trainer.set_data_augmentation()
+    trainer.apply_data_augmentation()
+
+    trainer.create_loaders()
+    trainer.create_model()
+    if config.test:
+        trainer.test()
+    else:
+        trainer.train()
 
 class UnitopathTrain():
     def __init__(self, config, checkpoint=None):
         self.config = config
         self.groupby = config.target
         self.checkpoint = None
-        self.load_checkpoint();
 
         utils.set_seed(config.seed)
         self.scaler = torch.cuda.amp.GradScaler()
 
 
     def load_checkpoint(self):
-        model_path = self.model_path()
-        print_stderr('=> Looking for saved checkpoint in ', model_path, '...')
-        if os.path.exists(model_path):
+        utils.ensure_dir(self.config.model_path)
+        self.model_path = self.config.model_path + '/model.pt'
+
+        print_stderr('=> Looking for saved checkpoint in ', self.model_path, '...')
+        if os.path.exists(self.model_path):
             print_stderr('=> Loaded checkpoint')
-            self.checkpoint = torch.load(model_path)
+            self.checkpoint = torch.load(self.model_path)
         else:
             print_stderr('=> No checkpoint found')
-
-
-    def resnet18(self, n_classes=2):
-        """
-        ResNet18 model with custom final layer matching the number of classes
-        :param n_classes: number of classes
-        """
-        model = torchvision.models.resnet18(weights='ResNet18_Weights.IMAGENET1K_V1')
-        model.fc = torch.nn.Linear(in_features=model.fc.in_features, out_features=n_classes, bias=True)
-        return model
 
 
     def read_data(self):
@@ -62,7 +74,7 @@ class UnitopathTrain():
         :return: train_df, test_df
         """
         self.path = os.path.join(self.config.path, str(self.config.size))
-        print(f"Path: {self.path}")
+        # print(f"Path: {self.path}")
         train_df = pd.read_csv(os.path.join(self.path, 'train.csv'))
         test_df = pd.read_csv(os.path.join(self.path, 'test.csv'))
 
@@ -157,12 +169,9 @@ class UnitopathTrain():
     def create_model_params(self):
         im_mean, im_std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225] # ImageNet
         norm = dict(
-            rgb=dict(mean=im_mean,
-                        std=im_std),
-            he=dict(mean=im_mean,
-                    std=im_std),
-            gray=dict(mean=[0.5],
-                        std=[1.0])
+            rgb=dict(mean=im_mean, std=im_std),
+            he=dict(mean=im_mean, std=im_std),
+            gray=dict(mean=[0.5], std=[1.0])
         )
 
         self.mean, self.std = norm[self.config.preprocess]['mean'], norm[self.config.preprocess]['std']
@@ -186,7 +195,14 @@ class UnitopathTrain():
         ])
 
 
+    def apply_data_augmentation(self):
+        # TODO: Entendre aquesta funció
+        self.T_train = partial(self.apply_transforms, True)
+        self.T_test = partial(self.apply_transforms, False)
+
+
     def apply_transforms(self, train, img):
+        # TODO: Entendre aquesta funció
         def normalize_he(x):
             if config.preprocess == 'he':
                 img = x
@@ -209,13 +225,7 @@ class UnitopathTrain():
         return self.T_post(image=x)['image']
 
 
-    def apply_data_augmentation(self):
-        self.T_train = partial(self.apply_transforms, True)
-        self.T_test = partial(self.apply_transforms, False)
-
-
     def create_loaders(self):
-
         datasets_kwargs = {
             'path': self.path,
             'subsample': self.config.subsample,
@@ -228,32 +238,26 @@ class UnitopathTrain():
         test_dataset = UnitopathoDataset(self.test_df, T=self.T_test, **datasets_kwargs)
 
         # Final loaders
-        train_loader = torch.utils.data.DataLoader(train_dataset, shuffle=True,
-                                                   batch_size=config.batch_size,
-                                                   num_workers=config.n_workers,
-                                                   pin_memory=True)
-        test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=False,
-                                                  batch_size=config.batch_size,
-                                                  num_workers=config.n_workers,
-                                                  pin_memory=True)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            shuffle=True,
+            batch_size=config.batch_size,
+            num_workers=config.n_workers,
+            pin_memory=True
+        )
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            shuffle=False,
+            batch_size=config.batch_size,
+            num_workers=config.n_workers,
+            pin_memory=True
+        )
 
         self.train_loader = train_loader
         self.test_loader = test_loader
 
 
-    def model_path(self):
-        model_path = self.config.model_path
-        utils.ensure_dir(model_path);
-
-        model_path += f"/model.pt"
-        return model_path
-
-
-    def train(self):
-        config = self.config
-        train_loader = self.train_loader
-        test_loader = self.test_loader
-
+    def create_model(self):
         n_channels = {
             'rgb': 3,
             'he': 3,
@@ -264,11 +268,30 @@ class UnitopathTrain():
         model.conv1 = torch.nn.Conv2d(n_channels[config.preprocess], 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         if self.checkpoint is not None:
             model.load_state_dict(self.checkpoint['model'])
-        model = model.to(config.device)
+
+        self.model = model.to(config.device)
+        self.criterion = F.cross_entropy
+    
+
+    def resnet18(self, n_classes=2):
+        """
+        ResNet18 model with custom final layer matching the number of classes
+        :param n_classes: number of classes
+        """
+        model = torchvision.models.resnet18(weights='ResNet18_Weights.IMAGENET1K_V1')
+        model.fc = torch.nn.Linear(in_features=model.fc.in_features, out_features=n_classes, bias=True)
+        return model
+
+
+    def train(self):
+        config = self.config
+        train_loader = self.train_loader
+        test_loader = self.test_loader
+        model = self.model
+        criterion = self.criterion
 
         optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
-        criterion = F.cross_entropy
 
         for epoch in range(config.epochs):
             train_metrics = utils.train(model, train_loader, criterion,
@@ -282,40 +305,30 @@ class UnitopathTrain():
             print(f'train: {train_metrics}')
             print(f'test: {test_metrics}')
 
-            if config.test is not None:
-                # wandb.log({'train': train_metrics, 'test': test_metrics})
-                torch.save(
-                    {
-                        'model': model.state_dict(),
-                        'optimizer': optimizer.state_dict(),
-                        'config': config
-                    },
-                    self.model_path()
-                )
+            torch.save(
+                {
+                    'model': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'config': config
+                },
+                self.model_path
+            )
 
+    def test(self):
+        config = self.config
+        test_loader = self.test_loader
+        model = self.model
+        criterion = self.criterion
 
-def main(config):
-    trainer = UnitopathTrain(config)
-    # Read data
-    trainer.read_data()
+        test_metrics = utils.test(model, test_loader, criterion, config.device, metrics=utils.metrics)
 
-    # Preprocess data
-    trainer.preprocess_data()
-
-    trainer.print_data_summary()
-
-    trainer.create_model_params()
-    trainer.set_data_augmentation()
-    trainer.apply_data_augmentation()
-
-    trainer.create_loaders()
-    trainer.train()
+        print(f'Test metrics: {test_metrics}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('test', type=str, help='Run id to test')
+    parser.add_argument('--test', action='store_true', help='Test mode')
 
     # data config
     parser.add_argument('--path', default=f'{os.path.expanduser("~")}/unitopath/', type=str, help='UNITOPATHO dataset path')
