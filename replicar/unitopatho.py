@@ -28,7 +28,7 @@ class UnitopathoDataset(torch.utils.data.Dataset):
         entry = self.df.iloc[index]
         image_id = entry.image_id
         image_id = os.path.join(self.path, entry.top_label_name, image_id)
-        # print("Reading image: ", image_id)
+        # print("Reading image: ", image_id, flush=True)
 
         img = None
 

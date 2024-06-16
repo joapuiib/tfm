@@ -4,6 +4,7 @@ import numpy as np
 import torch
 # import wandb
 import pandas as pd
+import sys
 
 from tqdm import tqdm
 from pathlib import Path
@@ -89,30 +90,61 @@ def metrics(outputs, labels):
         # cm=wandb.Table(dataframe=pd.DataFrame(cm(outputs, labels)))
     )
 
+def sizeof_fmt(num, suffix="B"):
+    for unit in ("", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"):
+        if abs(num) < 1024.0:
+            return f"{num:3.1f}{unit}{suffix}"
+        num /= 1024.0
+    return f"{num:.1f}Yi{suffix}"
+
 def train(model, dataloader, criterion, optimizer, device, metrics, accumulation_steps=1, scaler=None, verbose=True):
     num_samples, tot_loss = 0., 0.
     all_outputs, all_labels = [], []
 
+    # print("Preparing model for training.")
     model.train()
+    # print("Model prepared for training.")
+
+    # print("Training model.")
+    # print("Verbose: ", verbose)
+
     itr = tqdm(dataloader, leave=False) if verbose else dataloader
+    # itr = dataloader
     for step, (data, labels) in enumerate(itr):
+        # print("\n\nStep: ", step)
+        # print("Data: ", data.shape)
+        # print("Data memory: ", sizeof_fmt(data.element_size() * data.nelement()))
+        # print("Labels: ", labels.shape, flush=True)
+        # print("Labels memory: ", sizeof_fmt(labels.element_size() * labels.nelement()), flush=True)
+
+        # print("Trying to allocate data on device: ", device, flush=True)
+        # print("Memory used on device: ", sizeof_fmt(torch.cuda.memory_allocated()), flush=True)
         data, labels = data.to(device), labels.to(device)
+        torch.cuda.empty_cache()
+        # print("Data allocated on device: ", data.device, flush=True)
+        # print("Memory used on device: ", sizeof_fmt(torch.cuda.memory_allocated()), flush=True)
 
         outputs, loss = None, None
 
         if scaler is None:
             with torch.enable_grad():
+                # print(f"Memory used on device before forward pass: {sizeof_fmt(torch.cuda.memory_allocated())}")
                 outputs = model(data)
                 loss = criterion(outputs, labels) / accumulation_steps
         else:
             with torch.cuda.amp.autocast():
+                # print(f"Memory used on device before forward pass: {sizeof_fmt(torch.cuda.memory_allocated())}")
                 outputs = model(data)
                 loss = criterion(outputs, labels) / accumulation_steps
+
+        # print(f"Memory used on device after forward pass: {sizeof_fmt(torch.cuda.memory_allocated())}")
 
         if scaler is None:
             loss.backward()
         else:
             scaler.scale(loss).backward()
+
+        # print(f"Memory used on device after backward pass: {sizeof_fmt(torch.cuda.memory_allocated())}")
 
         if (step+1) % accumulation_steps == 0 or step == len(dataloader)-1:
             if scaler is None:

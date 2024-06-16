@@ -1,12 +1,12 @@
 #!/bin/bash
 target="type"
-size="7000_224"
+size="7000"
 epochs=50
-batch_size=20
-n_workers=8
+batch_size=1
+n_workers=1
 
 model_dir="$HOME/tfm/replicar/models/$target-$size"
-replicar="$HOME/tfm/replicar/train.py --target type --size $size --batch_size $batch_size --n_workers $n_workers --model_path $model_dir --epochs $epochs $@"
+replicar="$HOME/tfm/replicar/train.py --target type --size $size --batch_size $batch_size --n_workers $n_workers --model_path $model_dir --epochs $epochs --no-verbose $@"
 datetime=$(date +%Y%m%d-%H%M%S)
 
 mkdir -p $model_dir

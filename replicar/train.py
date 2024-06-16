@@ -19,6 +19,7 @@ import numpy as np
 
 from unitopatho import UnitopathoDataset
 import utils
+from presenter import ResultPresenter
 
 
 def print_stderr(*args, **kwargs):
@@ -33,6 +34,7 @@ def main(config):
     trainer.read_data()
     trainer.preprocess_data()
     trainer.print_data_summary()
+    trainer.create_presenter()
 
     trainer.create_model_params()
     trainer.set_data_augmentation()
@@ -130,7 +132,8 @@ class UnitopathTrain():
 
         self.train_df = train_df
         self.test_df = test_df
-        self.n_classes = len(self.train_df[self.config.target].unique())
+        self.classes = train_df[self.config.target + "_name"].unique()
+        self.n_classes = len(self.classes)
 
 
     def preprocess_df(self, df, label):
@@ -164,6 +167,18 @@ class UnitopathTrain():
         print_stderr(len(test_df.wsi.unique()), 'WSIs')
 
         print_stderr(f'=> Training for {self.n_classes} classes')
+
+
+    def create_presenter(self):
+        self.presenter = ResultPresenter()
+        self.presenter.set_classes(list(self.classes) + ['TOTAL'])
+
+        if self.config.test:
+            self.presenter.set_labels(['Test'])
+        else: 
+            self.presenter.set_labels(['Train', 'Test'])
+
+        self.presenter.print_header()
 
 
     def create_model_params(self):
@@ -293,17 +308,29 @@ class UnitopathTrain():
         optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
+        # print('=> Training model')
         for epoch in range(config.epochs):
-            train_metrics = utils.train(model, train_loader, criterion,
-                                        optimizer, config.device, metrics=utils.metrics,
-                                        accumulation_steps=config.accumulation_steps, scaler=self.scaler)
+            train_metrics = utils.train(
+                model,
+                train_loader,
+                criterion,
+                optimizer,
+                config.device,
+                metrics=utils.metrics,
+                accumulation_steps=config.accumulation_steps,
+                scaler=self.scaler,
+                verbose=not config.no_verbose
+            )
             scheduler.step()
 
             test_metrics = utils.test(model, test_loader, criterion, config.device, metrics=utils.metrics)
 
-            print(f'Epoch {epoch}')
-            print(f'train: {train_metrics}')
-            print(f'test: {test_metrics}')
+            # print(f'Epoch {epoch}')
+            presenter_train_metrics = list(train_metrics['class_ba'].values())
+            presenter_test_metrics = list(test_metrics['class_ba'].values())
+            self.presenter.print_cells([epoch] + presenter_train_metrics + [train_metrics['ba']] + presenter_test_metrics + [test_metrics['ba']])
+            # print(f'train: {train_metrics}')
+            # print(f'test: {test_metrics}')
 
             torch.save(
                 {
@@ -314,6 +341,7 @@ class UnitopathTrain():
                 self.model_path
             )
 
+
     def test(self):
         config = self.config
         test_loader = self.test_loader
@@ -322,13 +350,16 @@ class UnitopathTrain():
 
         test_metrics = utils.test(model, test_loader, criterion, config.device, metrics=utils.metrics)
 
-        print(f'Test metrics: {test_metrics}')
+        # print(f'Test metrics: {test_metrics}')
+        presenter_test_metrics = list(test_metrics['class_ba'].values())
+        self.presenter.print_cells([0] + presenter_test_metrics + [test_metrics['ba']])
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--test', action='store_true', help='Test mode')
+    parser.add_argument('--no-verbose', action='store_true', help='No Verbose')
 
     # data config
     parser.add_argument('--path', default=f'{os.path.expanduser("~")}/unitopath/', type=str, help='UNITOPATHO dataset path')
