@@ -55,6 +55,7 @@ class UnitopathTrain():
 
         utils.set_seed(config.seed)
         self.scaler = torch.cuda.amp.GradScaler()
+        # self.scaler = None
 
 
     def load_checkpoint(self):
@@ -148,6 +149,7 @@ class UnitopathTrain():
         df = df[df.grade >= 0].copy()
 
         # Filtra per tipus en cas de TA o TVA
+        # TODO: tornar a mirar
         if label == 'ta' or label == 'tva':
             df = df[df.type == label].copy()
         return df
@@ -178,7 +180,6 @@ class UnitopathTrain():
         else: 
             self.presenter.set_labels(['Train', 'Test'])
 
-        self.presenter.print_header()
 
 
     def create_model_params(self):
@@ -279,24 +280,27 @@ class UnitopathTrain():
             'gray': 1
         }
 
-        model = self.resnet18(n_classes=self.n_classes)
+        model = torchvision.models.resnet18(weights='ResNet18_Weights.IMAGENET1K_V1')
+        if self.config.requires_grad:
+            print('=> Training all layers')
+        else:
+            print('=> Freezing internal layers')
+            for param in model.parameters():
+                param.requires_grad = False;
+
         model.conv1 = torch.nn.Conv2d(n_channels[config.preprocess], 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        # model.conv1 = torch.nn.Conv2d(n_channels[config.preprocess], 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=True)
+        model.fc = torch.nn.Linear(in_features=model.fc.in_features, out_features=self.n_classes, bias=True)
+        # Provar en requires_grad False i vore que no canvia
+
         if self.checkpoint is not None:
             model.load_state_dict(self.checkpoint['model'])
 
         self.model = model.to(config.device)
         self.criterion = F.cross_entropy
+        # self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
+        # self.criterion = torch.nn.CrossEntropyLoss()
     
-
-    def resnet18(self, n_classes=2):
-        """
-        ResNet18 model with custom final layer matching the number of classes
-        :param n_classes: number of classes
-        """
-        model = torchvision.models.resnet18(weights='ResNet18_Weights.IMAGENET1K_V1')
-        model.fc = torch.nn.Linear(in_features=model.fc.in_features, out_features=n_classes, bias=True)
-        return model
-
 
     def train(self):
         config = self.config
@@ -309,6 +313,7 @@ class UnitopathTrain():
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
         # print('=> Training model')
+        # self.presenter.print_header()
         for epoch in range(config.epochs):
             train_metrics = utils.train(
                 model,
@@ -325,12 +330,12 @@ class UnitopathTrain():
 
             test_metrics = utils.test(model, test_loader, criterion, config.device, metrics=utils.metrics)
 
-            # print(f'Epoch {epoch}')
-            presenter_train_metrics = list(train_metrics['class_ba'].values())
-            presenter_test_metrics = list(test_metrics['class_ba'].values())
-            self.presenter.print_cells([epoch] + presenter_train_metrics + [train_metrics['ba']] + presenter_test_metrics + [test_metrics['ba']])
-            # print(f'train: {train_metrics}')
-            # print(f'test: {test_metrics}')
+            # presenter_train_metrics = list(train_metrics['class_ba'].values())
+            # presenter_test_metrics = list(test_metrics['class_ba'].values())
+            # self.presenter.print_cells([epoch] + presenter_train_metrics + [train_metrics['ba']] + presenter_test_metrics + [test_metrics['ba']])
+            print(f'Epoch {epoch}')
+            print(f"train: {train_metrics}")
+            print(f"test: {test_metrics}")
 
             torch.save(
                 {
@@ -350,9 +355,10 @@ class UnitopathTrain():
 
         test_metrics = utils.test(model, test_loader, criterion, config.device, metrics=utils.metrics)
 
-        # print(f'Test metrics: {test_metrics}')
-        presenter_test_metrics = list(test_metrics['class_ba'].values())
-        self.presenter.print_cells([0] + presenter_test_metrics + [test_metrics['ba']])
+        # presenter_test_metrics = list(test_metrics['class_ba'].values())
+        # self.presenter.print_header()
+        # self.presenter.print_cells([0] + presenter_test_metrics + [test_metrics['ba']])
+        print(f"test: {test_metrics}")
 
 
 if __name__ == '__main__':
@@ -375,6 +381,8 @@ if __name__ == '__main__':
     parser.add_argument('--accumulation_steps', default=1, type=int, help='gradient accumulation steps')
     parser.add_argument('--n_workers', default=8, type=int)
     parser.add_argument('--architecture', default='resnet18', help='resnet18, resnet50, densenet121')
+
+    parser.add_argument('--requires_grad', action=argparse.BooleanOptionalAction, help='Train all layers')
 
     # training config
     parser.add_argument('--preprocess', default='rgb', help='preprocessing type, rgb, he or gray. Default: rgb')

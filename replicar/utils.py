@@ -103,6 +103,7 @@ def train(model, dataloader, criterion, optimizer, device, metrics, accumulation
 
     # print("Preparing model for training.")
     model.train()
+    optimizer.zero_grad()
     # print("Model prepared for training.")
 
     # print("Training model.")
@@ -131,6 +132,7 @@ def train(model, dataloader, criterion, optimizer, device, metrics, accumulation
                 # print(f"Memory used on device before forward pass: {sizeof_fmt(torch.cuda.memory_allocated())}")
                 outputs = model(data)
                 loss = criterion(outputs, labels) / accumulation_steps
+                # print(type(loss))
         else:
             with torch.cuda.amp.autocast():
                 # print(f"Memory used on device before forward pass: {sizeof_fmt(torch.cuda.memory_allocated())}")
