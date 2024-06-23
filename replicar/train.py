@@ -382,7 +382,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_workers', default=8, type=int)
     parser.add_argument('--architecture', default='resnet18', help='resnet18, resnet50, densenet121')
 
-    parser.add_argument('--requires_grad', action=argparse.BooleanOptionalAction, help='Train all layers')
+    parser.add_argument('--requires_grad', action=argparse.BooleanOptionalAction, default=True, help='Train all layers')
 
     # training config
     parser.add_argument('--preprocess', default='rgb', help='preprocessing type, rgb, he or gray. Default: rgb')
