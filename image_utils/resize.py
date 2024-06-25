@@ -3,10 +3,10 @@
 import os
 from PIL import Image
 
-origin_dir = "~/unitopath/7000/"
-# dest_dir = "~/images/7000_1812/"
-dest_size_width = 1812
-dest_size_height = 1812
+origin_dir = "800/"
+dest_dir = "800_224/"
+dest_size_width = 224
+dest_size_height = 224
 
 modes = {
     "LANCZOS": Image.LANCZOS,
@@ -18,7 +18,7 @@ modes = {
 }
 
 for name, resize_mode in modes.items():
-    dest_dir = f"~/images/7000_1812_{name}/"
+    # dest_dir = f"~/images/7000_1812_{name}/"
 
     origin_dir = os.path.expanduser(origin_dir)
     dest_dir = os.path.expanduser(dest_dir)
