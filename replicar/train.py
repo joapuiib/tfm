@@ -105,6 +105,11 @@ class UnitopathTrain():
         test_df = self.test_df
         config = self.config
 
+        if config.variance_threshold > 0:
+            print_stderr('=> Removing features with variance below', config.variance_threshold)
+            train_df = self.remove_low_variance_features(train_df, config.variance_threshold)
+            test_df = self.remove_low_variance_features(test_df, config.variance_threshold)
+
         if config.target == 'grade':
             # Preprocess data
             train_df = self.preprocess_df(train_df, config.label)
@@ -135,6 +140,14 @@ class UnitopathTrain():
         self.test_df = test_df
         self.classes = train_df[self.config.target + "_name"].unique()
         self.n_classes = len(self.classes)
+
+
+    def remove_low_variance_features(self, df, threshold):
+        # Check if df has variance column
+        if 'variance' not in df.columns:
+            raise ValueError('No variance column in dataframe')
+
+        return df.loc[df.variance >= threshold].copy()
 
 
     def preprocess_df(self, df, label):
@@ -371,6 +384,7 @@ if __name__ == '__main__':
     parser.add_argument('--path', default=f'{os.path.expanduser("~")}/unitopath/', type=str, help='UNITOPATHO dataset path')
     parser.add_argument('--size', default=100, type=str, help='patch size in µm (default 100)')
     parser.add_argument('--subsample', default=-1, type=int, help='subsample size for data (-1 to disable, default -1)')
+    parser.add_argument('--variance_threshold', default=0.0, type=float, help='variance threshold for data (default 0.0)')
 
     # optimizer & network config
     parser.add_argument('--epochs', type=int, default=50)
