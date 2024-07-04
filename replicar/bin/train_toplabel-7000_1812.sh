@@ -9,13 +9,15 @@ weight_decay="1e-5"
 path="/home/joapuiib/images/"
 
 model_dir="$HOME/tfm/replicar/models/$target-$size"
+model_path="$model_dir/model.pt"
+
 replicar="$HOME/tfm/replicar/train.py \
 	--path $path \
 	--target $target \
 	--size $size \
 	--batch_size $batch_size \
 	--n_workers $n_workers \
-	--model_path $model_dir \
+	--model_path $model_path \
 	--epochs $epochs \
 	--lr $lr \
 	--weight_decay $weight_decay \

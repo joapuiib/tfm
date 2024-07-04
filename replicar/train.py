@@ -60,7 +60,7 @@ class UnitopathTrain():
 
     def load_checkpoint(self):
         utils.ensure_dir(self.config.model_path)
-        self.model_path = self.config.model_path + '/model.pt'
+        self.model_path = self.config.model_path
 
         print_stderr('=> Looking for saved checkpoint in ', self.model_path, '...')
         if os.path.exists(self.model_path):
