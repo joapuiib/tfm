@@ -43,8 +43,10 @@ def main(config):
     trainer.create_loaders()
     trainer.create_model()
     if config.test:
+        print('=> Testing model')
         trainer.test()
     else:
+        print('=> Training model')
         trainer.train()
 
 class UnitopathTrain():
@@ -59,8 +61,10 @@ class UnitopathTrain():
 
 
     def load_checkpoint(self):
-        utils.ensure_dir(self.config.model_path)
         self.model_path = self.config.model_path
+
+        model_dir = os.path.dirname(self.model_path)
+        utils.ensure_dir(model_dir)
 
         print_stderr('=> Looking for saved checkpoint in ', self.model_path, '...')
         if os.path.exists(self.model_path):
@@ -295,7 +299,7 @@ class UnitopathTrain():
 
         model = torchvision.models.resnet18(weights='ResNet18_Weights.IMAGENET1K_V1')
         if self.config.requires_grad:
-            print('=> Training all layers')
+            print('=> Using all layers')
         else:
             print('=> Freezing internal layers')
             for param in model.parameters():

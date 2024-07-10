@@ -7,7 +7,7 @@ n_workers=8
 lr="1e-2"
 weight_decay="1e-5"
 
-model_dir="$HOME/tfm/replicar/models/$target-$size"
+model_dir="$HOME/tfm/replicar/models/$target-$size-2"
 model_path="$model_dir/model.pt"
 
 replicar="$HOME/tfm/replicar/train.py \
