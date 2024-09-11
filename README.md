@@ -46,6 +46,8 @@ Quan s'utilitza la categoria `grade`, es pot decidir si es desitja treballar sob
 | TVA       | 0.7229     | 0.7310 | 0.67 | * | __0.8332__ | 0.6685     | 0.76 |
 | __Total__ | 0.6378     | 0.6031 | ?    | * | __0.7017__ | 0.5440     | ?    |
 
+> Els resultats de `800_custom` han segut validats amb el conjunt de test original `800`
+
 (*) No es disposa de suficient memòria per l'entrenament 7000 amb les imatges originals.
 
 #### Entrenament totes les classes (`top_label`)
