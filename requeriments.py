@@ -5,3 +5,4 @@ torchvision
 matplotlib
 albumentations
 tqdm
+scikit-learn
