@@ -1,4 +1,5 @@
 #include <iostream>
+#include "kmeans.h"
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <string>
@@ -6,7 +7,7 @@
 int main() {
     std::string imagePath;
 
-    // Create K-means codebook
+    KMeans kmeans(8, 3);
 
     while (std::cin >> imagePath) {
         // Load image in BGR format
@@ -24,19 +25,18 @@ int main() {
             for (int col = 0; col < image.cols; ++col) {
                 // Access the BGR pixel values
                 cv::Vec3b pixel = image.at<cv::Vec3b>(row, col);
-                int blue = pixel[0];
-                int green = pixel[1];
-                int red = pixel[2];
-
-                // Optional: Print pixel values (can be commented out for performance)
-                std::cout << "Pixel at (" << row << "," << col << "): "
-                          << "R=" << red << ", G=" << green << ", B=" << blue << std::endl;
-
-                // Add pixel to the codebook
+                double blue  = pixel[0] / 255.0;
+                double green = pixel[1] / 255.0;
+                double red   = pixel[2] / 255.0;
+                std::vector<double> x = {red, green, blue};
+                kmeans.add(x);
             }
         }
     }
 
     // Save the codebook to a file
-    return 0;
+    std::string filename = "codebook.txt";
+    kmeans.save(filename);
+
+    return EXIT_SUCCESS;
 }
