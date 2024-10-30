@@ -6,6 +6,11 @@ en el paper _[UNITOPATHO, A LABELED HISTOPATHOLOGICAL DATASET FOR COLORECTAL POL
 - Data augmentation
 - Entrenament d'una xarxa neuronal convolucional. A partir d'un model ImageNet ResNet-18 preentrenat amb SGD durant 50 epochs amb un learning rate de 0.01, que disminueix un 10% cada 20 epochs.
 
+Repositoris interessants:
+
+- https://github.com/EIDOSLAB/UC2-UniToPatho
+- https://github.com/EIDOSLAB/UNITOPATHO
+
 
 ### Dades
 | Top label | Top label id |
